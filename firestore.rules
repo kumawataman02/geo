@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Helpers ----------
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function groupPath(gid) { return /databases/$(database)/documents/groups/$(gid); }
+    function isMember(gid) { return me() in get(groupPath(gid)).data.memberIds; }
+    function hasInvite(gid) {
+      return exists(/databases/$(database)/documents/invites/$(gid + '_' + me()));
+    }
+
+    // ---------- Users ----------
+    match /users/{uid} {
+      allow read: if signedIn();                      // needed for email search
+      allow write: if signedIn() && me() == uid;      // only your own profile
+    }
+
+    // ---------- Groups ----------
+    match /groups/{gid} {
+      allow read: if signedIn() && me() in resource.data.memberIds;
+
+      allow create: if signedIn()
+        && request.resource.data.ownerId == me()
+        && request.resource.data.memberIds == [me()];
+
+      allow update: if signedIn() && (
+        // Owner: may change fence etc., but not transfer ownership
+        (resource.data.ownerId == me()
+          && request.resource.data.ownerId == resource.data.ownerId)
+        ||
+        // Invitee: may only add THEMSELF to memberIds, and only with an invite
+        (hasInvite(gid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds'])
+          && request.resource.data.memberIds.toSet()
+               == resource.data.memberIds.toSet().union([me()].toSet()))
+      );
+
+      allow delete: if signedIn() && resource.data.ownerId == me();
+
+      // ---------- Members ----------
+      match /members/{uid} {
+        allow read: if signedIn() && isMember(gid);
+        // getAfter: the group doc is created in the same batch as the owner's member doc
+        allow create: if signedIn() && uid == me()
+          && (getAfter(groupPath(gid)).data.ownerId == me() || hasInvite(gid));
+        allow delete: if signedIn()
+          && (uid == me() || get(groupPath(gid)).data.ownerId == me());
+      }
+
+      // ---------- Exit events (Phase 3/4) ----------
+      match /events/{eid} {
+        allow read: if signedIn() && isMember(gid);
+        // No update/delete rule: event history can't be changed
+        allow create: if signedIn() && isMember(gid)
+          && request.resource.data.uid == me();
+      }
+    }
+
+    // ---------- FCM tokens (Phase 4) ----------
+    // Separate from users/ because every signed-in user can read users/.
+    // No read rule = clients can't read tokens; the Cloud Function uses admin access.
+    match /fcmTokens/{uid} {
+      allow write: if signedIn() && me() == uid;
+    }
+
+    // ---------- Invites ----------
+    match /invites/{inviteId} {
+      allow read: if signedIn()
+        && (resource.data.toUid == me() || resource.data.fromUid == me());
+
+      allow create: if signedIn()
+        && request.resource.data.fromUid == me()
+        && getAfter(groupPath(request.resource.data.groupId)).data.ownerId == me()
+        && inviteId == request.resource.data.groupId + '_' + request.resource.data.toUid;
+
+      allow delete: if signedIn()
+        && (resource.data.toUid == me() || resource.data.fromUid == me());
+    }
+  }
+}

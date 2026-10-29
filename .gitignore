@@ -13,3 +13,7 @@ local.properties
 .externalNativeBuild/
 .cxx/
 **/build/
+# AI tooling added by `firebase init`, not part of the app
+.claude/
+.agents/
+skills-lock.json
