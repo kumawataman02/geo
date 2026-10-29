@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,13 +14,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.geo.auth.User
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun BottomSheet(
     modifier: Modifier = Modifier,
+    selectedFriends: List<User>,
     onSearchFriend: (String) -> Unit,
+    onRemoveFriend: (User) -> Unit,
     onCreateGroup: (String) -> Unit
 ) {
     var groupName by rememberSaveable {
@@ -88,6 +92,20 @@ fun BottomSheet(
                 }
             }
         )
+
+        // Selected friends, invited when the group is created
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            selectedFriends.forEach { friend ->
+                InputChip(
+                    selected = true,
+                    onClick = { onRemoveFriend(friend) },
+                    label = { Text(friend.userName.ifBlank { friend.userEmail }) },
+                    trailingIcon = {
+                        Icon(Icons.Default.Close, contentDescription = "Remove ${friend.userName}")
+                    }
+                )
+            }
+        }
 
         // Create Group
         Button(

@@ -13,5 +13,10 @@ sealed interface AppDestination {
         override val route = "home"
     }
 
+    data object Fence : AppDestination {
+        override val route = "fence/{groupId}"
+        fun createRoute(groupId: String) = "fence/$groupId"
+    }
+
 
 }

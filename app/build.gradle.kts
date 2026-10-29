@@ -1,3 +1,12 @@
+import java.util.Properties
+
+val mapsApiKey: String = rootProject.file("local.properties")
+    .takeIf { it.exists() }
+    ?.let { file -> Properties().apply { file.inputStream().use(::load) } }
+    ?.getProperty("MAPS_API_KEY")
+    ?.trim()
+    .orEmpty()
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -22,6 +31,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     buildTypes {
@@ -32,8 +43,9 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        // 17: maps-compose is built for JVM 17
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
         compose = true
@@ -77,4 +89,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
 
     implementation("androidx.compose.material:material-icons-extended")
+
+    implementation(libs.maps.compose)
+    implementation(libs.play.services.location)
 }
