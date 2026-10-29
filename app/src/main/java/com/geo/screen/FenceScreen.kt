@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,7 +42,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.geo.commontes.UiState
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.Circle
@@ -51,12 +51,14 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberUpdatedMarkerState
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 
-// Map opens here when there is no saved fence and no location permission
+
 private val DEFAULT_CENTER = LatLng(20.59, 78.96)
 
-// Below ~100m, normal GPS error causes false exits
+
 private const val MIN_RADIUS_M = 100f
 private const val MAX_RADIUS_M = 2000f
 
@@ -73,12 +75,16 @@ fun FenceScreen(
         if (saveState is UiState.Success) onBack()
     }
 
-    val title = (groupState as? UiState.Success)?.data?.groupName.orEmpty()
+    val group = (groupState as? UiState.Success)?.data
+
+    val readOnly = group != null && group.ownerId != viewModel.myUid
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Set Geofence: $title") },
+                title = {
+                    Text((if (readOnly) "Geofence: " else "Set Geofence: ") + group?.groupName.orEmpty())
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -94,11 +100,16 @@ fun FenceScreen(
             contentAlignment = Alignment.Center
         ) {
             when (val state = groupState) {
-                is UiState.Success -> FenceEditor(
-                    savedFence = state.data.fence,
-                    saveState = saveState,
-                    onSave = viewModel::saveFence
-                )
+                is UiState.Success -> if (readOnly && state.data.fence == null) {
+                    Text("The owner hasn't set a geofence yet")
+                } else {
+                    FenceEditor(
+                        savedFence = state.data.fence,
+                        readOnly = readOnly,
+                        saveState = saveState,
+                        onSave = viewModel::saveFence
+                    )
+                }
 
                 is UiState.Error -> Text(state.message, color = MaterialTheme.colorScheme.error)
                 else -> CircularProgressIndicator()
@@ -110,12 +121,11 @@ fun FenceScreen(
 @Composable
 private fun FenceEditor(
     savedFence: Fence?,
+    readOnly: Boolean,
     saveState: UiState<Unit>,
     onSave: (Fence) -> Unit
 ) {
     val context = LocalContext.current
-
-    // Screen-local draft; it only goes to Firestore when Save is pressed
     var center by remember { mutableStateOf(savedFence?.let { LatLng(it.lat, it.lng) }) }
     var radius by remember { mutableFloatStateOf(savedFence?.radiusM?.toFloat() ?: 300f) }
 
@@ -123,39 +133,59 @@ private fun FenceEditor(
         position = CameraPosition.fromLatLngZoom(center ?: DEFAULT_CENTER, if (center != null) 15f else 4f)
     }
 
+    var locating by remember { mutableStateOf(savedFence == null && !readOnly) }
+    var locationError by remember { mutableStateOf<String?>(null) }
+
     var hasLocation by remember { mutableStateOf(context.hasLocationPermission()) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { result -> hasLocation = result.values.any { it } }
+    ) { result ->
+        hasLocation = result.values.any { it }
+        if (!hasLocation) locating = false
+    }
+
 
     LaunchedEffect(Unit) {
-        if (!hasLocation) {
+        if (!hasLocation && !readOnly) {
             permissionLauncher.launch(
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
             )
         }
     }
 
-    // New fence: owner's current location becomes the default center (tap to move it).
-    // Editing: stay on the saved fence.
+
     LaunchedEffect(hasLocation) {
-        if (hasLocation && savedFence == null) {
-            val here = currentLocation(context) ?: return@LaunchedEffect
+        if (!hasLocation || savedFence != null || readOnly) return@LaunchedEffect
+        val here = currentLocation(context)
+        if (here != null) {
             val point = LatLng(here.latitude, here.longitude)
-            // Don't overwrite a point the owner already tapped while location was loading
-            if (center == null) center = point
-            camera.animate(CameraUpdateFactory.newLatLngZoom(point, 15f))
+            center = point
+            camera.position = CameraPosition.fromLatLngZoom(point, 15f)
+        } else {
+            locationError = "Couldn't find your location. Turn on location, or tap the map to choose."
         }
+        locating = false
     }
 
     Column(Modifier.fillMaxSize()) {
-        GoogleMap(
+        if (locating) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                CircularProgressIndicator()
+                Text("Finding your location…", Modifier.padding(top = 12.dp))
+            }
+        } else GoogleMap(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
             cameraPositionState = camera,
             properties = MapProperties(isMyLocationEnabled = hasLocation),
-            onMapClick = { center = it }
+            onMapClick = if (readOnly) null else { point -> center = point }
         ) {
             center?.let { point ->
                 Marker(state = rememberUpdatedMarkerState(position = point))
@@ -169,6 +199,14 @@ private fun FenceEditor(
             }
         }
 
+        if (readOnly) {
+            Text(
+                "Radius: ${radius.roundToInt()} m · set by the group owner",
+                Modifier.padding(16.dp)
+            )
+            return@Column
+        }
+
         Column(Modifier.padding(16.dp)) {
             Text(
                 if (center == null) "Tap on the map to choose the center"
@@ -179,6 +217,7 @@ private fun FenceEditor(
                 onValueChange = { radius = it },
                 valueRange = MIN_RADIUS_M..MAX_RADIUS_M
             )
+            locationError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (saveState is UiState.Error) {
                 Text(saveState.message, color = MaterialTheme.colorScheme.error)
             }
@@ -199,10 +238,12 @@ private fun Context.hasLocationPermission() =
     ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
-// Only called after hasLocationPermission() is true
+
 @SuppressLint("MissingPermission")
+
 private suspend fun currentLocation(context: Context): Location? = runCatching {
-    LocationServices.getFusedLocationProviderClient(context)
-        .getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
-        .await()
+    val client = LocationServices.getFusedLocationProviderClient(context)
+    withTimeoutOrNull(10_000.milliseconds) {
+        client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).await()
+    } ?: client.lastLocation.await()
 }.getOrNull()

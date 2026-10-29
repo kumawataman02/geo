@@ -2,8 +2,11 @@ package com.geo.screen
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.util.Log
+import com.geo.auth.LoginRepository
 import com.geo.auth.User
 import com.geo.commontes.UiState
+import com.geo.geofence.GeofenceManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,7 +18,9 @@ import javax.inject.Inject
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    private val mainRepository: MainRepository
+    private val mainRepository: MainRepository,
+    private val loginRepository: LoginRepository,
+    private val geofenceManager: GeofenceManager
 ) : ViewModel() {
 
     private val _makeGroup = MutableStateFlow<UiState<String>>(UiState.Idle)
@@ -42,6 +47,23 @@ class MainViewModel @Inject constructor(
     val groups = mainRepository.observeMyGroups()
         .catch { emit(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    init {
+
+        viewModelScope.launch {
+            runCatching { loginRepository.saveFcmToken() }
+                .onSuccess { Log.d("MainViewModel", "FCM token saved") }
+                .onFailure { Log.e("MainViewModel", "FCM token save failed", it) }
+        }
+
+        viewModelScope.launch {
+            groups.collect { geofenceManager.sync(it) }
+        }
+    }
+
+    fun resyncGeofences() {
+        viewModelScope.launch { geofenceManager.sync(groups.value) }
+    }
 
     fun groupMake(groupName: String) {
         viewModelScope.launch {

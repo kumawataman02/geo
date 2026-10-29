@@ -30,7 +30,6 @@ class MainRepository @Inject constructor(
             .documents
             .firstOrNull() ?: return@runCatching null
 
-        // Fields match LoginRepository.saveUser
         User(
             userId = document.getString("uid").orEmpty(),
             userName = document.getString("name").orEmpty(),
@@ -39,7 +38,6 @@ class MainRepository @Inject constructor(
         )
     }
 
-    // Group, owner and all invites are written in one batch: all or nothing
     suspend fun makeGroup(groupName: String, invitees: List<User>): Result<String> = runCatching {
         val me = auth.currentUser ?: error("User is not logged in")
         val name = groupName.trim()
@@ -59,7 +57,6 @@ class MainRepository @Inject constructor(
             set(groupRef.collection("members").document(me.uid), memberData(me, MemberRole.OWNER))
 
             invitees.filter { it.userId != me.uid }.distinctBy { it.userId }.forEach { friend ->
-                // Deterministic id: one pending invite per user per group
                 set(
                     firestore.collection("invites").document("${groupRef.id}_${friend.userId}"),
                     mapOf(
@@ -77,7 +74,6 @@ class MainRepository @Inject constructor(
         groupRef.id
     }
 
-    // An invite doc existing = pending. Accept/reject both delete it.
     fun observeMyInvites(): Flow<List<Invite>> {
         val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
         return firestore.collection("invites")
@@ -85,8 +81,6 @@ class MainRepository @Inject constructor(
             .snapshots()
             .map { it.toObjects(Invite::class.java) }
     }
-
-    // No orderBy: arrayContains + orderBy needs a composite index, sort in UI instead
     fun observeMyGroups(): Flow<List<Group>> {
         val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
         return firestore.collection("groups")
@@ -116,13 +110,24 @@ class MainRepository @Inject constructor(
             .toObject(Group::class.java) ?: error("Group not found")
     }
 
-    // update(), not set(): only the fence field changes, memberIds etc. stay
     suspend fun setFence(groupId: String, fence: Fence): Result<Unit> = runCatching<Unit> {
         firestore.collection("groups").document(groupId).update(
             "fence", mapOf(
                 "lat" to fence.lat,
                 "lng" to fence.lng,
                 "radiusM" to fence.radiusM
+            )
+        ).await()
+    }
+
+    suspend fun addExitEvent(groupId: String): Result<Unit> = runCatching<Unit> {
+        val me = auth.currentUser ?: error("User is not logged in")
+        firestore.collection("groups").document(groupId).collection("events").add(
+            mapOf(
+                "uid" to me.uid,
+                "name" to me.displayName.orEmpty(),
+                "type" to "EXIT",
+                "at" to FieldValue.serverTimestamp()
             )
         ).await()
     }

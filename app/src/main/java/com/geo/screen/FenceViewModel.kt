@@ -16,8 +16,10 @@ class FenceViewModel @Inject constructor(
     private val mainRepository: MainRepository
 ) : ViewModel() {
 
-    // Comes from the "fence/{groupId}" route argument
+
     private val groupId: String = checkNotNull(savedStateHandle["groupId"])
+
+    val myUid = mainRepository.myUid
 
     private val _group = MutableStateFlow<UiState<Group>>(UiState.Loading)
 

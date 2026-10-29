@@ -13,6 +13,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
@@ -94,6 +95,15 @@ class LoginRepository @Inject constructor(
         firestore.collection("users")
             .document(user.userId)
             .set(userData, SetOptions.merge())
+            .await()
+    }
+
+    suspend fun saveFcmToken(token: String? = null) {
+        val uid = auth.currentUser?.uid ?: return // saved again after login
+        val value = token ?: FirebaseMessaging.getInstance().token.await()
+        firestore.collection("fcmTokens")
+            .document(uid)
+            .set(mapOf("token" to value, "updatedAt" to FieldValue.serverTimestamp()))
             .await()
     }
 }
