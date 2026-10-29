@@ -1,68 +1,46 @@
 
 package com.geo.screen
 
-import android.util.Patterns
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.GroupAdd
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.geo.commontes.BottomSheet
 import com.geo.commontes.CustomFloatingActionButton
 import com.geo.commontes.UiState
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     viewModel: MainViewModel = hiltViewModel()
 ) {
-    val searchState by viewModel.searchState.collectAsState()
+    val searchState by viewModel.searchState.collectAsStateWithLifecycle()
+    val groupState by viewModel.makeGroup.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var showAddOptions by remember { mutableStateOf(false) }
-    var showCreateForm by remember { mutableStateOf(false) }
-    var groupName by remember { mutableStateOf("") }
-    var emailInput by remember { mutableStateOf("") }
-    val invitedEmails = remember { mutableStateListOf<String>() }
 
     fun closeSheet() {
         showAddOptions = false
-        showCreateForm = false
-        groupName = ""
-        emailInput = ""
-        invitedEmails.clear()
         viewModel.resetSearchState()
+        viewModel.resetGroupState()
     }
 
-    val trimmedEmail = emailInput.trim()
-    val isEmailValid = Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()
-
+    LaunchedEffect(groupState) {
+        if (groupState is UiState.Success) closeSheet()
+    }
 
     Scaffold(
         bottomBar = {
@@ -140,6 +118,12 @@ fun MainScreen(
                 UiState.Loading -> CircularProgressIndicator(modifier)
                 is UiState.Success -> Text("${state.data.userName} (${state.data.userEmail})", modifier)
                 is UiState.Error -> Text(state.message, modifier, color = MaterialTheme.colorScheme.error)
+            }
+
+            when (val state = groupState) {
+                UiState.Loading -> CircularProgressIndicator(modifier)
+                is UiState.Error -> Text(state.message, modifier, color = MaterialTheme.colorScheme.error)
+                else -> Unit
             }
         }
     }

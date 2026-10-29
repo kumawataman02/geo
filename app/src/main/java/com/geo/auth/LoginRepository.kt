@@ -86,7 +86,7 @@ class LoginRepository @Inject constructor(
         val userData = mapOf(
             "uid" to user.userId,
             "name" to user.userName,
-            "email" to user.userEmail,
+            "email" to user.userEmail.lowercase(),
             "image" to user.userImage,
             "updatedAt" to FieldValue.serverTimestamp()
         )
