@@ -9,14 +9,11 @@ data class Group(
     @DocumentId val groupId: String = "",
     val groupName: String = "",
     val ownerId: String = "",
-    // serverTimestamp() is stored as Timestamp, a Long here fails toObject()
     val createdAt: Timestamp? = null,
     val memberIds: List<String> = emptyList(),
-    // null = owner has not set a geofence yet
     val fence: Fence? = null,
 )
 
-// Circle geofence: Android's Geofencing API only supports circles
 data class Fence(
     val lat: Double = 0.0,
     val lng: Double = 0.0,

@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.geo.auth.LoginScreen
+import com.geo.messaging.RequestNotificationPermission
 import com.geo.screen.FenceScreen
 import com.geo.screen.MainScreen
 
@@ -34,6 +35,7 @@ fun AppNavigation(
         }
 
         composable(AppDestination.Home.route) {
+            RequestNotificationPermission()
             MainScreen(
                 onOpenFence = { groupId ->
                     navController.navigate(AppDestination.Fence.createRoute(groupId))

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.geo.commontes.BottomSheet
 import com.geo.commontes.CustomFloatingActionButton
 import com.geo.commontes.UiState
+import com.geo.geofence.BackgroundLocationCard
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,6 +111,7 @@ fun MainScreen(
             groups = groups,
             myUid = viewModel.myUid,
             onGroupClick = onOpenFence,
+            onLocationGranted = viewModel::resyncGeofences,
             inviteAction = inviteAction,
             onAccept = viewModel::acceptInvite,
             onReject = viewModel::rejectInvite
@@ -165,6 +168,7 @@ fun MainItem(
     groups: List<Group>,
     myUid: String?,
     onGroupClick: (String) -> Unit,
+    onLocationGranted: () -> Unit,
     inviteAction: UiState<Unit>,
     onAccept: (Invite) -> Unit,
     onReject: (Invite) -> Unit
@@ -199,20 +203,23 @@ fun MainItem(
 
             1 -> {
                 Title("My Groups")
+                // Only ask when there is actually a fence to monitor
+                if (groups.any { it.fence != null }) BackgroundLocationCard(onGranted = onLocationGranted)
                 if (groups.isEmpty()) EmptyText("No groups yet")
                 LazyColumn {
                     items(groups.sortedByDescending { it.createdAt }, key = { it.groupId }) { group ->
-                        // Only the owner may set or change the fence
                         val isOwner = group.ownerId == myUid
                         val fenceText = group.fence?.let { "Fence: ${it.radiusM.roundToInt()} m" } ?: "No fence set"
                         ListItem(
                             headlineContent = { Text(group.groupName) },
                             supportingContent = { Text("${group.memberIds.size} members · $fenceText") },
                             leadingContent = { Icon(Icons.Default.Group, contentDescription = null) },
-                            trailingContent = if (isOwner) {
-                                { Icon(Icons.Default.EditLocation, contentDescription = "Edit geofence") }
-                            } else null,
-                            modifier = Modifier.clickable(enabled = isOwner) { onGroupClick(group.groupId) }
+                            // Owner edits the fence, members can view it
+                            trailingContent = {
+                                if (isOwner) Icon(Icons.Default.EditLocation, contentDescription = "Edit geofence")
+                                else Icon(Icons.Default.Visibility, contentDescription = "View geofence")
+                            },
+                            modifier = Modifier.clickable { onGroupClick(group.groupId) }
                         )
                     }
                 }
