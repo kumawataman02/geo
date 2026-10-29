@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.geo.auth.LoginScreen
+import com.geo.screen.FenceScreen
 import com.geo.screen.MainScreen
 
 
@@ -33,7 +34,16 @@ fun AppNavigation(
         }
 
         composable(AppDestination.Home.route) {
-            MainScreen()
+            MainScreen(
+                onOpenFence = { groupId ->
+                    navController.navigate(AppDestination.Fence.createRoute(groupId))
+                }
+            )
+        }
+
+        // groupId reaches FenceViewModel through SavedStateHandle
+        composable(AppDestination.Fence.route) {
+            FenceScreen(onBack = { navController.popBackStack() })
         }
     }
 }

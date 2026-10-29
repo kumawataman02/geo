@@ -1,19 +1,26 @@
 package com.geo.screen
 
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.DocumentId
 
-enum class MemberRole(
-    val role: String
-) {
-    OWNER("OWNER"),
-    MEMBER("MEMBER")
-}
+enum class MemberRole { OWNER, MEMBER }
 
 data class Group(
-    val groupId: String = "",
+    @DocumentId val groupId: String = "",
     val groupName: String = "",
     val ownerId: String = "",
-    val createdAt: Long? = null,
-    val members: List<Member> = emptyList()
+    // serverTimestamp() is stored as Timestamp, a Long here fails toObject()
+    val createdAt: Timestamp? = null,
+    val memberIds: List<String> = emptyList(),
+    // null = owner has not set a geofence yet
+    val fence: Fence? = null,
+)
+
+// Circle geofence: Android's Geofencing API only supports circles
+data class Fence(
+    val lat: Double = 0.0,
+    val lng: Double = 0.0,
+    val radiusM: Double = 300.0
 )
 
 data class Member(
@@ -21,6 +28,5 @@ data class Member(
     val email: String = "",
     val displayName: String = "",
     val role: MemberRole = MemberRole.MEMBER,
-    val joinedAt: Long? = null
+    val joinedAt: Timestamp? = null
 )
-

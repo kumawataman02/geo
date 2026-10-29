@@ -6,7 +6,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import com.geo.R
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
@@ -22,9 +22,9 @@ class LoginRepository @Inject constructor(
 ) {
 
     suspend fun signInWithGoogle(context: Context): User {
-        val googleIdOption = GetGoogleIdOption.Builder().setServerClientId(context.getString(R.string.default_web_client_id))
-            .setFilterByAuthorizedAccounts(false)
-            .build()
+        val googleIdOption = GetSignInWithGoogleOption.Builder(
+            context.getString(R.string.default_web_client_id)
+        ).build()
 
         val request = GetCredentialRequest.Builder()
             .addCredentialOption(googleIdOption)
